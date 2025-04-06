@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <title>Kółko i Krzyżyk</title>
+  <style>
+    :root {
+      --bg-color: #20232a;
+      --cell-bg: #282c34;
+      --cell-hover: #3a3f4b;
+      --text-color: #ffffff;
+      --win-color: #28a745;
+    }
+
+    [data-theme="light"] {
+      --bg-color: #f4f4f4;
+      --cell-bg: #ffffff;
+      --cell-hover: #ddd;
+      --text-color: #000000;
+      --win-color: #ff5722;
+    }
+
+    body {
+      background: var(--bg-color);
+      color: var(--text-color);
+      font-family: 'Segoe UI', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+    }
+
+    h1 {
+      margin-bottom: 1rem;
+    }
+
+    .controls {
+      margin-bottom: 1rem;
+    }
+
+    .board {
+      display: grid;
+      grid-template-columns: repeat(3, 100px);
+      grid-template-rows: repeat(3, 100px);
+      gap: 5px;
+    }
+
+    .cell {
+      background: var(--cell-bg);
+      border: 2px solid #444;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2.5rem;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.3s;
+    }
+
+    .cell:hover {
+      background: var(--cell-hover);
+    }
+
+    .cell.win {
+      background: var(--win-color) !important;
+      animation: flash 0.5s infinite alternate;
+    }
+
+    @keyframes flash {
+      from { transform: scale(1); }
+      to   { transform: scale(1.1); }
+    }
+
+    .status {
+      margin-top: 1rem;
+      font-size: 1.2rem;
+    }
+
+    .reset-btn, .theme-btn, .mode-select {
+      margin-top: 1rem;
+      padding: 0.5rem 1rem;
+      font-size: 1rem;
+      background: #61dafb;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      color: #000;
+      margin-right: 10px;
+    }
+
+    .reset-btn:hover, .theme-btn:hover, .mode-select:hover {
+      background: #21a1f1;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Kółko i Krzyżyk</h1>
+  <div class="controls">
+    <button class="reset-btn" onclick="resetGame()">Resetuj</button>
+    <button class="theme-btn" onclick="toggleTheme()">Zmień motyw</button>
+    <select class="mode-select" onchange="setGameMode(this.value)">
+      <option value="ai">Gracz vs Komputer</option>
+      <option value="pvp">Gracz vs Gracz</option>
+    </select>
+  </div>
+
+  <div class="board" id="board"></div>
+  <div class="status" id="status">Gracz X zaczyna</div>
+
+  <script>
+    const board = document.getElementById('board');
+    const statusText = document.getElementById('status');
+    let currentPlayer = 'X';
+    let gameActive = true;
+    let cells = Array(9).fill('');
+    let vsAI = true;
+
+    function createBoard() {
+      board.innerHTML = '';
+      cells.forEach((value, index) => {
+        const cell = document.createElement('div');
+        cell.classList.add('cell');
+        cell.dataset.index = index;
+        cell.textContent = value;
+        cell.addEventListener('click', handleMove);
+        board.appendChild(cell);
+      });
+    }
+
+    function handleMove(e) {
+      const index = e.target.dataset.index;
+
+      if (!gameActive || cells[index]) return;
+
+      cells[index] = currentPlayer;
+      e.target.textContent = currentPlayer;
+
+      if (checkWin()) {
+        statusText.textContent = `Gracz ${currentPlayer} wygrał!`;
+        gameActive = false;
+      } else if (cells.every(cell => cell)) {
+        statusText.textContent = 'Remis!';
+        gameActive = false;
+      } else {
+        currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
+        statusText.textContent = `Tura gracza ${currentPlayer}`;
+        if (vsAI && currentPlayer === 'O' && gameActive) {
+          setTimeout(() => aiMoveMinimax(), 300);
+        }
+      }
+
+      saveGameState();
+    }
+
+    function checkWin() {
+      const winPatterns = [
+        [0, 1, 2], [3, 4, 5], [6, 7, 8],
+        [0, 3, 6], [1, 4, 7], [2, 5, 8],
+        [0, 4, 8], [2, 4, 6]
+      ];
+
+      for (let pattern of winPatterns) {
+        const [a, b, c] = pattern;
+        if (cells[a] && cells[a] === cells[b] && cells[a] === cells[c]) {
+          highlightWin(pattern);
+          return true;
+        }
+      }
+      return false;
+    }
+
+    function highlightWin(pattern) {
+      pattern.forEach(index => {
+        document.querySelectorAll('.cell')[index].classList.add('win');
+      });
+    }
+
+    function aiMoveMinimax() {
+      let bestScore = -Infinity;
+      let move;
+      for (let i = 0; i < cells.length; i++) {
+        if (cells[i] === '') {
+          cells[i] = 'O';
+          let score = minimax(cells, 0, false);
+          cells[i] = '';
+          if (score > bestScore) {
+            bestScore = score;
+            move = i;
+          }
+        }
+      }
+      if (move != null) {
+        cells[move] = 'O';
+        createBoard();
+        if (checkWin()) {
+          statusText.textContent = `Gracz O (komputer) wygrał!`;
+          gameActive = false;
+        } else if (cells.every(cell => cell)) {
+          statusText.textContent = 'Remis!';
+          gameActive = false;
+        } else {
+          currentPlayer = 'X';
+          statusText.textContent = `Tura gracza X`;
+        }
+        saveGameState();
+      }
+    }
+
+    function minimax(boardState, depth, isMaximizing) {
+      if (checkWinMinimax(boardState, 'O')) return 10 - depth;
+      if (checkWinMinimax(boardState, 'X')) return depth - 10;
+      if (boardState.every(cell => cell)) return 0;
+
+      if (isMaximizing) {
+        let bestScore = -Infinity;
+        for (let i = 0; i < 9; i++) {
+          if (boardState[i] === '') {
+            boardState[i] = 'O';
+            let score = minimax(boardState, depth + 1, false);
+            boardState[i] = '';
+            bestScore = Math.max(score, bestScore);
+          }
+        }
+        return bestScore;
+      } else {
+        let bestScore = Infinity;
+        for (let i = 0; i < 9; i++) {
+          if (boardState[i] === '') {
+            boardState[i] = 'X';
+            let score = minimax(boardState, depth + 1, true);
+            boardState[i] = '';
+            bestScore = Math.min(score, bestScore);
+          }
+        }
+        return bestScore;
+      }
+    }
+
+    function checkWinMinimax(boardState, player) {
+      const winPatterns = [
+        [0, 1, 2], [3, 4, 5], [6, 7, 8],
+        [0, 3, 6], [1, 4, 7], [2, 5, 8],
+        [0, 4, 8], [2, 4, 6]
+      ];
+      return winPatterns.some(([a, b, c]) =>
+        boardState[a] === player && boardState[b] === player && boardState[c] === player);
+    }
+
+    function resetGame() {
+      cells = Array(9).fill('');
+      currentPlayer = 'X';
+      gameActive = true;
+      statusText.textContent = 'Gracz X zaczyna';
+      localStorage.removeItem('ticTacToeState');
+      createBoard();
+    }
+
+    function saveGameState() {
+      localStorage.setItem('ticTacToeState', JSON.stringify({
+        cells, currentPlayer, gameActive, vsAI
+      }));
+    }
+
+    function loadGameState() {
+      const saved = JSON.parse(localStorage.getItem('ticTacToeState'));
+      if (saved) {
+        cells = saved.cells;
+        currentPlayer = saved.currentPlayer;
+        gameActive = saved.gameActive;
+        vsAI = saved.vsAI;
+        statusText.textContent = gameActive
+          ? `Tura gracza ${currentPlayer}`
+          : `Gra zakończona`;
+        createBoard();
+      } else {
+        createBoard();
+      }
+    }
+
+    function toggleTheme() {
+      const theme = document.body.getAttribute('data-theme');
+      document.body.setAttribute('data-theme', theme === 'light' ? 'dark' : 'light');
+    }
+
+    function setGameMode(mode) {
+      vsAI = mode === 'ai';
+      resetGame();
+    }
+
+    document.body.setAttribute('data-theme', 'dark');
+    loadGameState();
+  </script>
+
+</body>
+</html>
