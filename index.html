@@ -102,7 +102,9 @@
     <button class="reset-btn" onclick="resetGame()">Resetuj</button>
     <button class="theme-btn" onclick="toggleTheme()">Zmień motyw</button>
     <select class="mode-select" onchange="setGameMode(this.value)">
-      <option value="ai">Gracz vs Komputer</option>
+      <option value="ai-easy">Gracz vs Komputer (Easy)</option>
+      <option value="ai-medium">Gracz vs Komputer (Medium)</option>
+      <option value="ai-hard" selected>Gracz vs Komputer (Hard)</option>
       <option value="pvp">Gracz vs Gracz</option>
     </select>
   </div>
@@ -116,7 +118,7 @@
     let currentPlayer = 'X';
     let gameActive = true;
     let cells = Array(9).fill('');
-    let vsAI = true;
+    let gameMode = 'ai-hard';
 
     function createBoard() {
       board.innerHTML = '';
@@ -132,7 +134,6 @@
 
     function handleMove(e) {
       const index = e.target.dataset.index;
-
       if (!gameActive || cells[index]) return;
 
       cells[index] = currentPlayer;
@@ -141,41 +142,35 @@
       if (checkWin()) {
         statusText.textContent = `Gracz ${currentPlayer} wygrał!`;
         gameActive = false;
+        setTimeout(resetGame, 1500);
       } else if (cells.every(cell => cell)) {
         statusText.textContent = 'Remis!';
         gameActive = false;
+        setTimeout(resetGame, 1500);
       } else {
         currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
         statusText.textContent = `Tura gracza ${currentPlayer}`;
-        if (vsAI && currentPlayer === 'O' && gameActive) {
-          setTimeout(() => aiMoveMinimax(), 300);
+        if (gameMode.startsWith('ai') && currentPlayer === 'O' && gameActive) {
+          setTimeout(() => aiMove(gameMode), 300);
         }
       }
-
       saveGameState();
     }
 
-    function checkWin() {
-      const winPatterns = [
-        [0, 1, 2], [3, 4, 5], [6, 7, 8],
-        [0, 3, 6], [1, 4, 7], [2, 5, 8],
-        [0, 4, 8], [2, 4, 6]
-      ];
-
-      for (let pattern of winPatterns) {
-        const [a, b, c] = pattern;
-        if (cells[a] && cells[a] === cells[b] && cells[a] === cells[c]) {
-          highlightWin(pattern);
-          return true;
-        }
-      }
-      return false;
+    function aiMove(mode) {
+      if (mode === 'ai-easy') return aiRandomMove();
+      if (mode === 'ai-medium') return Math.random() < 0.5 ? aiRandomMove() : aiMoveMinimax();
+      return aiMoveMinimax();
     }
 
-    function highlightWin(pattern) {
-      pattern.forEach(index => {
-        document.querySelectorAll('.cell')[index].classList.add('win');
-      });
+    function aiRandomMove() {
+      const empty = cells.map((v, i) => v === '' ? i : null).filter(i => i !== null);
+      const move = empty[Math.floor(Math.random() * empty.length)];
+      if (move != null) {
+        cells[move] = 'O';
+        createBoard();
+        postAIMove();
+      }
     }
 
     function aiMoveMinimax() {
@@ -195,18 +190,24 @@
       if (move != null) {
         cells[move] = 'O';
         createBoard();
-        if (checkWin()) {
-          statusText.textContent = `Gracz O (komputer) wygrał!`;
-          gameActive = false;
-        } else if (cells.every(cell => cell)) {
-          statusText.textContent = 'Remis!';
-          gameActive = false;
-        } else {
-          currentPlayer = 'X';
-          statusText.textContent = `Tura gracza X`;
-        }
-        saveGameState();
+        postAIMove();
       }
+    }
+
+    function postAIMove() {
+      if (checkWin()) {
+        statusText.textContent = `Gracz O (komputer) wygrał!`;
+        gameActive = false;
+        setTimeout(resetGame, 1500);
+      } else if (cells.every(cell => cell)) {
+        statusText.textContent = 'Remis!';
+        gameActive = false;
+        setTimeout(resetGame, 1500);
+      } else {
+        currentPlayer = 'X';
+        statusText.textContent = `Tura gracza X`;
+      }
+      saveGameState();
     }
 
     function minimax(boardState, depth, isMaximizing) {
@@ -239,6 +240,28 @@
       }
     }
 
+    function checkWin() {
+      const winPatterns = [
+        [0, 1, 2], [3, 4, 5], [6, 7, 8],
+        [0, 3, 6], [1, 4, 7], [2, 5, 8],
+        [0, 4, 8], [2, 4, 6]
+      ];
+      for (let pattern of winPatterns) {
+        const [a, b, c] = pattern;
+        if (cells[a] && cells[a] === cells[b] && cells[a] === cells[c]) {
+          highlightWin(pattern);
+          return true;
+        }
+      }
+      return false;
+    }
+
+    function highlightWin(pattern) {
+      pattern.forEach(index => {
+        document.querySelectorAll('.cell')[index].classList.add('win');
+      });
+    }
+
     function checkWinMinimax(boardState, player) {
       const winPatterns = [
         [0, 1, 2], [3, 4, 5], [6, 7, 8],
@@ -260,7 +283,7 @@
 
     function saveGameState() {
       localStorage.setItem('ticTacToeState', JSON.stringify({
-        cells, currentPlayer, gameActive, vsAI
+        cells, currentPlayer, gameActive, gameMode
       }));
     }
 
@@ -270,7 +293,8 @@
         cells = saved.cells;
         currentPlayer = saved.currentPlayer;
         gameActive = saved.gameActive;
-        vsAI = saved.vsAI;
+        gameMode = saved.gameMode || 'ai-hard';
+        document.querySelector('.mode-select').value = gameMode;
         statusText.textContent = gameActive
           ? `Tura gracza ${currentPlayer}`
           : `Gra zakończona`;
@@ -286,7 +310,7 @@
     }
 
     function setGameMode(mode) {
-      vsAI = mode === 'ai';
+      gameMode = mode;
       resetGame();
     }
 
